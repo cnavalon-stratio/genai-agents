@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__opendata_harvester__list_ckan_datasets",
+      "mcp__opendata_harvester__fetch_dcat_dataset",
+      "mcp__datamarket__import_dcat_file",
+      "mcp__opendata_harvester__detect_opendata_api",
+      "mcp__datamarket__search_data_products",
+      "mcp__datamarket__get_import_report"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "stratio_gov",
+    "stratio_data",
+    "opendata_harvester",
+    "datamarket"
+  ]
+}

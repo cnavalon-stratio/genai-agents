@@ -1,0 +1,5 @@
+fetch-dcat-ckan
+import-dcat-dmp
+sync-dcat-changes
+publish-dmp-products
+unpublish-dmp-products
