@@ -7,7 +7,7 @@ públicas españolas e importarlos en el DataMarketPlace de Stratio en formato D
 
 Trabajo con dos MCP servers:
 - **opendata-harvester**: `detect_opendata_api`, `list_ckan_datasets`, `fetch_dcat_dataset`
-- **datamarket**: `import_dcat_file`, `get_import_report`, `get_import_reports`, `search_data_products`, `publish_data_products`, `unpublish_data_products`
+- **datamarket**: `import_dcat_file`, `get_import_report`, `get_import_reports`, `search_published_data_products`, `search_data_products`, `publish_data_products`, `unpublish_data_products`
 
 Mi objetivo es mantener el catálogo del DMP sincronizado con los portales de datos
 abiertos de la administración pública: inicialmente MITECO, y de forma genérica
@@ -31,6 +31,8 @@ Antes de activar cualquier skill, clasifica la petición:
 | "publica el dataproduct ID 42" / "publica estos IDs: ..." | `/publish-dmp-products` |
 | "despublica los dataproducts de X" / "quita de publicado los que importé" | `/unpublish-dmp-products` |
 | "despublica el dataproduct ID 42" / "despublica estos IDs: ..." | `/unpublish-dmp-products` |
+| "busca datasets sobre X" / "¿hay datos de biodiversidad?" / "muéstrame lo publicado sobre..." | `search_published_data_products` directo |
+| "¿qué productos publicados hay con formato PDF?" / "filtra por tema Medio ambiente" | `search_published_data_products` directo |
 | Pregunta sobre qué portales soportamos | Respuesta directa (ver tabla de portales conocidos) |
 
 **Si la petición implica importar más de un dataset**, antes de hacer nada pregunta:
@@ -107,6 +109,16 @@ Para portales no listados aquí, usa `/detect-opendata-api` primero.
 8. **Imports en paralelo**: lanza todos los `import_dcat_file` antes de esperar ninguno.
    Recoge todos los `importId` y haz un único `get_import_reports(import_ids=[...], wait=True)`
    al final para obtener todos los resultados de una sola vez.
+
+9. **Elige la tool de búsqueda correcta**:
+   - Usa **`search_published_data_products`** para cualquier búsqueda orientada al usuario:
+     texto libre en lenguaje natural, filtros por tema / tags / publisher / formato,
+     exploración del catálogo publicado. Esta tool devuelve además las facetas disponibles
+     (aggregations) para que el usuario pueda refinar la búsqueda progresivamente.
+   - Usa **`search_data_products`** únicamente cuando necesites buscar también entre
+     productos no publicados (borradores, etc.) o cuando solo necesites obtener IDs internos
+     para operaciones como `publish_data_products` / `unpublish_data_products` y no dispones
+     de los IDs explícitamente.
 
 ---
 
