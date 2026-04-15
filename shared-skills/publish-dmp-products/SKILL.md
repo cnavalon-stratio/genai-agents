@@ -23,9 +23,13 @@ Antes de ejecutar nada, identifica de qué tipo es la petición:
 | Caso | Parámetro a usar |
 |------|-----------------|
 | El usuario da un tema/palabra clave en el nombre | `name_like` |
+| El usuario menciona algo que aparece en la descripción | `description_like` |
 | El usuario menciona keywords o etiquetas concretas | `keywords` |
 | El usuario da IDs explícitos | `data_product_ids` |
+| El usuario quiere actuar sobre lo importado en una fecha concreta | `created_after` / `created_before` |
 | El usuario quiere publicar "todos" sin filtro | **No permitido** — pide al menos un criterio |
+
+Los filtros son combinables entre sí (p.ej. `name_like` + `created_after`).
 
 Si la petición es ambigua, formula **una sola pregunta** para clarificar el criterio.
 No procedas si no tienes al menos un filtro claro.
@@ -38,9 +42,12 @@ No procedas si no tienes al menos un filtro claro.
 
 ```
 publish_data_products(
-  name_like="<término>",       # si aplica
-  keywords=["<kw1>", ...],     # si aplica
-  data_product_ids=[...],      # si aplica
+  name_like="<término>",         # si aplica
+  description_like="<texto>",    # si aplica
+  keywords=["<kw1>", ...],       # si aplica
+  data_product_ids=[...],        # si aplica
+  created_after="YYYY-MM-DD",    # si aplica
+  created_before="YYYY-MM-DD",   # si aplica
   dry_run=true
 )
 ```
@@ -67,8 +74,11 @@ Ejecuta la publicación con los mismos parámetros pero `dry_run=false` (o sin e
 ```
 publish_data_products(
   name_like="<término>",
+  description_like="<texto>",
   keywords=["<kw1>", ...],
   data_product_ids=[...],
+  created_after="YYYY-MM-DD",
+  created_before="YYYY-MM-DD",
   dry_run=false
 )
 ```
@@ -96,6 +106,9 @@ Ejemplo de resumen:
 
 ## Reglas
 
+- **Si los IDs son conocidos de un paso anterior** (p.ej. vienen de un import report),
+  usa siempre `data_product_ids` directamente — no hagas una búsqueda por nombre o descripción.
+  Los IDs son exactos e inequívocos; una búsqueda puede devolver falsos positivos.
 - Nunca publiques sin haber mostrado primero el dry_run al usuario.
 - Si el usuario ya sabe exactamente qué quiere publicar (da IDs), el dry_run es opcional pero recomendado.
 - No uses `search_data_products` por separado para luego publicar manualmente — usa siempre `publish_data_products` que lo hace internamente de forma más eficiente.

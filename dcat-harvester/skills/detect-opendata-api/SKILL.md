@@ -27,12 +27,31 @@ Según el resultado, presenta:
    → Usa /fetch-dcat-ckan {api_base_url} para descargar los metadatos.
 ```
 
-**Si es DKAN u OpenDataSoft:**
+**Si es DKAN:**
 ```
-⚠️  Portal {platform} detectado
-   Este servidor soporta actualmente solo CKAN.
-   Para integrar este portal habría que añadir soporte específico para {platform}.
-   Consulta la documentación del portal para ver si expone endpoints DCAT-AP-ES.
+✅ Portal DKAN detectado
+   URL base: {api_base_url}
+
+   Este portal puede integrarse automáticamente.
+   → Usa /fetch-dcat-nonckan {api_base_url} para descargar los metadatos.
+```
+
+**Si es OpenDataSoft:**
+```
+✅ Portal OpenDataSoft detectado
+   URL base: {api_base_url}
+
+   Este portal puede integrarse automáticamente.
+   → Usa /fetch-dcat-nonckan {api_base_url} para descargar los metadatos.
+```
+
+**Si es ArcGIS Hub:**
+```
+✅ Portal ArcGIS Hub detectado
+   URL del catálogo: {catalog_url}
+
+   Este portal puede integrarse automáticamente.
+   → Usa /fetch-dcat-nonckan {catalog_url} para descargar los metadatos.
 ```
 
 **Si es unknown:**

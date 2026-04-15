@@ -132,6 +132,17 @@ Datasets importados disponibles en el DMP.
 ¿Deseas configurar sincronización automática? Usa /sync-dcat-changes.
 ```
 
+**Si el usuario pidió publicar tras el import** (p.ej. "importa y publícalo"):
+extrae los `Data Product ID` de los items SUCCESS y úsalos directamente —
+no hagas una nueva búsqueda por nombre o descripción:
+
+```
+publish_data_products(
+  data_product_ids=[12345, 12346, ...],   # IDs del import report
+  dry_run=true                            # primero preview, luego confirmar
+)
+```
+
 ## Reglas invariables
 
 - Un error en un dataset NO debe abortar el proceso completo.
