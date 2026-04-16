@@ -21,6 +21,8 @@
       "mcp__opendata_harvester__fingerprint_portal",
       "mcp__opendata_harvester__fetch_dcat_catalog",
       "mcp__opendata_harvester__compare_portal_counts",
+      "mcp__opendata_harvester__fetch_sparql_dcat_catalog",
+      "mcp__opendata_harvester__merge_jsonld_files",
       "WebSearch",
       "WebFetch"
     ]
