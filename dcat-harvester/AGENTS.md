@@ -7,9 +7,10 @@ públicas españolas e importarlos en el DataMarketPlace de Stratio en formato D
 
 Trabajo con dos MCP servers:
 - **opendata-harvester**:
-    - Detección: `detect_opendata_api`
+    - Fingerprinting y comparación: `fingerprint_portal`, `compare_portal_counts`
+    - Detección rápida (legacy): `detect_opendata_api`
     - CKAN (Tier 0): `list_ckan_datasets`, `fetch_dcat_catalog`, `fetch_dcat_dataset`
-    - **datos.gob.es (fuente secundaria para admins españolas sin CKAN)**: `list_datos_gob_es_datasets`, `fetch_datos_gob_es_catalog`
+    - **datos.gob.es (SOLO comparación, NUNCA descarga salvo petición explícita)**: `list_datos_gob_es_datasets`, `fetch_datos_gob_es_catalog`
     - Tier 1 (directo): `fetch_dcat_catalog_direct`
     - Tier 2 Descubrimiento: `discover_dcat_source`
     - Tier 3 DKAN: `list_dkan_datasets`
@@ -29,31 +30,54 @@ Cuando el usuario pide datos de una organización y no ha especificado la fuente
 ```
 "<nombre org> portal datos abiertos open data España"
 ```
-Ejemplos de portales propios que puedes encontrar: CKAN, DKAN, OpenDataSoft, ArcGIS Hub, NAP sectorial.
+Ejemplos de portales propios que puedes encontrar: CKAN, SPARQL, DKAN, OpenDataSoft, ArcGIS Hub, NAP sectorial.
 
-**Paso 2 — Cuenta en datos.gob.es** (siempre, en paralelo con el paso 1):
+**Paso 2 — Fingerprint del portal** (en paralelo con el paso 1, en cuanto tengas la URL):
 ```
-list_datos_gob_es_datasets("<nombre o acrónimo>", page_size=1)
+fingerprint_portal("<URL del portal encontrada>")
 ```
-Devuelve el total sin descargar nada. Acepta nombres sin acento y acrónimos ("DGT", "RENFE", "BNE", "MITECO", "Junta de Andalucia"…).
+Detecta plataforma, versión, plugins y consulta datos.gob.es para comparación.
+Si aún no tienes URL, usa `list_datos_gob_es_datasets("<nombre>", page_size=1)` para obtener el conteo de comparación.
 
-**Paso 3 — Presenta todas las fuentes encontradas** y pregunta al usuario:
-> "He encontrado X fuentes de datos para <org>:
-> - **Portal propio**: nap.dgt.es (CKAN, ~36 datasets) — datos NAP/ITS en tiempo real
-> - **datos.gob.es**: 974 datasets — series históricas, estadísticas, etc.
-    > ¿De cuál quieres importar? ¿O de las dos?"
+**Paso 3 — Presenta fuentes + conteos** y pregunta al usuario:
+> "He encontrado el portal de <org>:
+> - **Portal propio**: datos.malaga.es (CKAN 2.9 con plugin DCAT, 1.300 datasets)
+> - **datos.gob.es**: 1.200 datasets (solo para comparación)
+> ¿Descargo los 1.300 del portal propio?"
 
 **Excepción**: si el usuario ya especificó la fuente ("importa del portal CKAN de la DGT", "de datos.gob.es"), ve directamente sin descubrimiento.
 
 ---
 
-## ⚡ Regla datos.gob.es (para admins españolas sin CKAN propio)
+## ⚡ Regla datos.gob.es — SOLO COMPARACIÓN
 
-`datos.gob.es` agrega los metadatos de todas las admins en formato DCAT-AP-ES nativo.
-Úsalo cuando no haya portal propio detectado, o cuando el usuario lo pida explícitamente.
+**datos.gob.es nunca es fuente de descarga salvo que el usuario lo pida explícitamente.**
 
-La tool acepta nombres en lenguaje natural **sin acento** y resuelve cualquier organización
-automáticamente vía SPARQL (no hace falta hardcodear DIR3):
+Su rol es exclusivamente comparativo: mostrar cuántos datasets tiene una org en el catálogo nacional
+frente a los que tiene en su portal propio, con los mismos filtros aplicados a ambas fuentes.
+
+### Cuándo usar datos.gob.es para comparar
+
+Siempre que el usuario consulte o descargue con filtros (keyword, fechas, tema):
+```
+compare_portal_counts(
+    portal_url="<URL base CKAN>",
+    dir3_code="<obtenido de fingerprint_portal>",  # o org_identifier
+    keyword="transporte",
+    from_date="2024-01-01"
+)
+```
+Respuesta tipo: "En el portal de Málaga hay **234** datasets de transporte de 2024. En datos.gob.es hay **123**."
+
+### Cuándo descargar de datos.gob.es
+
+**Solo** cuando el usuario lo pida explícitamente:
+- "descarga de datos.gob.es"
+- "importa desde datos.gob.es"
+- "usa datos.gob.es como fuente"
+
+En ese caso usa `fetch_datos_gob_es_catalog`. La tool acepta nombres en lenguaje natural
+**sin acento** y resuelve cualquier organización vía SPARQL:
 
 | Escribes | Se resuelve a |
 |----------|---------------|
@@ -64,9 +88,6 @@ automáticamente vía SPARQL (no hace falta hardcodear DIR3):
 | `"Ayuntamiento de Madrid"` | DIR3 L01280796 |
 | `"Comunidad de Madrid"` | DIR3 A28003018 |
 | _cualquier otro nombre o acrónimo_ | SPARQL automático |
-
-Solo recurre a Tier 1/2/3 si la organización explícitamente **no tiene api CKAN** y **no está en datos.gob.es**
-o el usuario pide el catálogo del portal fuente específicamente.
 
 ---
 
@@ -82,8 +103,8 @@ Antes de actuar, clasifica la petición:
 | "actualiza / refresca / sincroniza X" | `/sync-dcat-changes` |
 | "¿qué datasets tiene X?" / "lista los datasets de X" | **Descubrimiento multi-fuente**: `WebSearch` + `list_datos_gob_es_datasets` → resumen de fuentes |
 | "descarga el dataset X de Y" | `fetch_dcat_dataset` directo (sin skill) |
-| "¿tiene CKAN este portal?" / "¿puedo integrar este ministerio?" | `detect_opendata_api` directo |
-| "qué catálogo tiene X?" / "busca el catálogo de X" | `discover_dcat_source` directo |
+| "¿tiene CKAN este portal?" / "¿puedo integrar este ministerio?" | `fingerprint_portal` directo (reemplaza `detect_opendata_api`) |
+| "qué catálogo tiene X?" / "busca el catálogo de X" | `fingerprint_portal` o `discover_dcat_source` |
 | "importa este fichero RDF que te paso" | Pregunta estrategia → `/import-dcat-dmp` directo |
 | "integra este portal DKAN / ODS / ArcGIS / desconocido" | `/fetch-dcat-nonckan` |
 | "publica los dataproducts de X" / "publica los que importé" | `/publish-dmp-products` |
@@ -138,7 +159,6 @@ Los IDs son exactos; una búsqueda posterior puede devolver falsos positivos.
 | MITECO                            | https://catalogo.datosabiertos.miteco.gob.es | |
 | datos.gob.es (meta-catálogo)      | https://datos.gob.es | |
 | Comunidad de Madrid               | https://datos.madrid.es | |
-| Euskadi                           | https://opendata.euskadi.eus | |
 | Generalitat de Catalunya          | https://analisi.transparenciacatalunya.cat | |
 | DGT — NAP (National Access Point) | https://nap.dgt.es | Datos ITS/transporte |
 
@@ -158,16 +178,47 @@ Muchos ayuntamientos y diputaciones españolas.
 
 ## Flujos de trabajo
 
-### Portal CKAN con plugin ckanext-dcat  — flujo PREFERENTE
+### Portal CKAN — flujo PREFERENTE
 
 ```
-1. /detect-opendata-api  → confirma CKAN y obtiene URL base
-2. /fetch-dcat-ckan      → descarga metadatos DCAT-AP-ES
-3. /import-dcat-dmp      → importa en el DMP
+1. fingerprint_portal(<URL>)
+   → ckan.api_base_url, ckan.has_dcat_plugin, datos_gob_es.dir3_code
+2. [si el usuario especificó filtros] compare_portal_counts(portal_url, dir3_code, keyword?, from_date?, to_date?)
+   → muestra conteo portal vs datos.gob.es antes de descargar
+3. /fetch-dcat-ckan      → descarga metadatos DCAT-AP-ES del portal propio
+4. /import-dcat-dmp      → importa en el DMP
 ```
 
-### Cualquier administración española sin CKAN -> datos.gob.es
+### Portal con SPARQL propio — flujo para consulta y conteo (NO CKAN). Puede llevar filtros.
 
+Cuando `fingerprint_portal` devuelve `sparql_endpoints` (lista no vacía), el portal usa su propio
+triplestore y NO es CKAN. Flujo para contar o descargar con keyword:
+
+```
+1. fingerprint_portal(<URL>)
+   → sparql_endpoints[0].url
+   → sparql_endpoints[0].dataset_count  (total del portal)
+   → datos_gob_es.dir3_code, datos_gob_es.total_dataset_count  (comparación)
+2. [si el usuario pregunta cuántos / quiere filtrar]
+   fetch_sparql_dcat_catalog(
+       sparql_url=sparql_endpoints[0].url,
+       keyword="<término>",       # opcional: filtra por título, dcat:keyword, descripción
+       location="<lugar>",        # opcional: filtra por dct:spatial, título, descripción
+       from_date="YYYY-MM-DD",    # opcional: datasets modificados desde esta fecha
+       to_date="YYYY-MM-DD",      # opcional: datasets modificados hasta esta fecha
+       max_datasets=50            # suficiente para contar; no descargar todo si solo se quiere el número
+   )
+   → reportar: "el portal tiene N datasets sobre '<keyword>'"
+3. [si el usuario quiere importar] quitar max_datasets o subirlo y continuar con /import-dcat-dmp
+```
+
+**Nunca confundas la detección SPARQL con datos.gob.es**: `datos_gob_es` en el fingerprint es solo
+comparativo. El endpoint SPARQL de `sparql_endpoints[0].url` es el del portal propio — úsalo para
+obtener los datos reales del portal.
+
+### Cualquier administración española — descarga explícita de datos.gob.es
+
+Solo cuando el usuario lo pide explícitamente ("descarga de datos.gob.es"):
 ```
 1. fetch_datos_gob_es_catalog("<nombre o DIR3>", keyword?, location?, from_date?, max_results?)
    → devuelve lista de file_path en /tmp/dcat-*.ttl
@@ -182,25 +233,6 @@ Sin preguntas intermedias si el usuario ya dijo que quiere importar.
 ```
 1. /sync-dcat-changes    → solo descarga e importa lo que ha cambiado
 ```
-
-### Admin española no en datos.gob.es (fallback)
-
-```
-1. discover_dcat_source  → encuentra URL del catálogo
-2. /detect-opendata-api  → identifica plataforma (CKAN / DKAN / ODS)
-3. Si CKAN → /fetch-dcat-ckan + /import-dcat-dmp
-   Si otro → /fetch-dcat-nonckan + /import-dcat-dmp
-```
-
-### Portal no-CKAN con URL conocida (extranjero / fuera de NTI-RISP)
-
-```
-1. /detect-opendata-api  → identifica plataforma
-2. /fetch-dcat-nonckan   → descarga catálogo
-3. /import-dcat-dmp      → importa en el DMP
-```
-
----
 
 ## Reglas de comportamiento
 

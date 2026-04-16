@@ -18,13 +18,14 @@
       "mcp__datamarket__search_published_data_products",
       "mcp__datamarket__publish_data_products",
       "mcp__datamarket__unpublish_data_products",
+      "mcp__opendata_harvester__fingerprint_portal",
+      "mcp__opendata_harvester__fetch_dcat_catalog",
+      "mcp__opendata_harvester__compare_portal_counts",
       "WebSearch",
       "WebFetch"
     ]
   },
   "enabledMcpjsonServers": [
-    "stratio_gov",
-    "stratio_data",
     "opendata_harvester",
     "datamarket"
   ]
