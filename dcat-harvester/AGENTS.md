@@ -56,7 +56,12 @@ Usa el `total` devuelto como conteo comparativo de datos.gob.es. Si tampoco devu
 informa al usuario que datos.gob.es no tiene datasets registrados para esa organización y continúa
 con el portal propio igualmente.
 
-**Paso 3 — Presenta fuentes + conteos** y pregunta al usuario:
+**Paso 3 — Obtén el conteo real del portal propio** antes de presentar nada:
+- Si `fingerprint_portal` devolvió `portal_dataset_count` (campo `Datasets: N`), úsalo.
+- Si no lo devolvió, llama a `compare_portal_counts(portal_url, dir3_code_o_org_identifier)` para obtenerlo.
+⚠️ **Nunca uses el conteo de datos.gob.es como proxy del portal propio** — pueden diferir (federación parcial, fuentes adicionales, filtros distintos).
+
+**Paso 3b — Presenta fuentes + conteos** y pregunta al usuario:
 > "He encontrado el portal de <org>:
 > - **Portal propio**: <URL> (<plataforma>, <N> datasets)
 > - **datos.gob.es**: <M> datasets con los mismos filtros (solo comparación, no se descarga de aquí)
