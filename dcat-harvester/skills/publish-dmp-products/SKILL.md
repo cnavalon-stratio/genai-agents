@@ -1,3 +1,13 @@
+---
+name: publish-dmp-products
+description: >
+  Publica en el DataMarketPlace de Stratio uno o varios Data Products importados
+  previamente (vía DCAT-AP o cualquier otro mecanismo). Soporta filtros por nombre,
+  descripción, keywords, fecha de creación o una lista explícita de IDs, siempre con
+  preview en dry_run y confirmación del usuario antes de aplicar los cambios.
+argument-hint: [criterio de selección, e.g. "los dataproducts de biodiversidad" o IDs concretos]
+---
+
 # Skill: Publicar Data Products en el DMP
 
 Publica en el DataMarketPlace uno o varios Data Products que hayan sido importados

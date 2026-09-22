@@ -1,3 +1,14 @@
+---
+name: fetch-dcat-nonckan
+description: >
+  Descarga el catálogo DCAT-AP-ES de un portal de datos abiertos que no usa CKAN
+  (DKAN, OpenDataSoft, ArcGIS Hub, endpoints SPARQL o portales desconocidos),
+  aplicando una estrategia por capas: catálogo DCAT directo, descubrimiento vía
+  datos.gob.es y APIs específicas de cada plataforma. Deja el RDF listo para
+  importar en el DMP.
+argument-hint: [URL del portal, e.g. https://datos.malaga.eu]
+---
+
 # Skill: fetch-dcat-nonckan
 
 Descarga el catálogo DCAT-AP-ES de un portal de datos abiertos que **no usa CKAN**,

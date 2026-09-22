@@ -1,3 +1,14 @@
+---
+name: unpublish-dmp-products
+description: >
+  Cambia a estado Unpublished uno o varios Data Products del DataMarketPlace de
+  Stratio. Soporta búsqueda por OpenSearch (text_query, searcher_filters) para
+  productos publicados y por REST (nombre, descripción, keywords, fechas) o IDs
+  explícitos, siempre con preview en dry_run y confirmación del usuario antes de
+  aplicar los cambios.
+argument-hint: [criterio de selección, e.g. "los dataproducts de biodiversidad" o IDs concretos]
+---
+
 # Skill: Despublicar Data Products en el DMP
 
 Cambia el estado de uno o varios Data Products del DataMarketPlace a Unpublished,
