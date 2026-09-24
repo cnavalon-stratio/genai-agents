@@ -3,7 +3,8 @@ name: import-dcat-dmp
 description: >
   Importa metadatos DCAT-AP-ES (ficheros RDF en Turtle, JSON-LD o RDF/XML) en el
   DataMarketPlace de Stratio a través de las herramientas import_dcat_file,
-  get_import_report y get_import_reports. El import es asíncrono: cada llamada
+  get_import_report y get_import_reports. Resuelve la carpeta destino (pathId) con
+  list_data_product_paths antes de importar. El import es asíncrono: cada llamada
   devuelve un importId en estado PENDING que hay que consultar hasta que finalice.
   Puede importar un dataset individual o procesar en batch los descargados por
   fetch-dcat-ckan. Genera un reporte detallado de éxitos, errores y warnings.
@@ -12,9 +13,15 @@ argument-hint: [dataset_id concreto, o "all" para importar lo descargado con fet
 
 # Skill: Import DCAT-AP en el DataMarketPlace
 
-## Fase 0: Decidir estrategia de batching (OBLIGATORIO — no saltar, no asumir)
+## Fase 0: Decidir estrategia de batching
 
-**Antes de hacer ninguna llamada MCP**, pregunta al usuario. No hay valor por defecto — no puedes continuar sin su respuesta:
+**Si solo hay un dataset que importar**: no preguntes nada. Usa directamente la **Opción A**
+(un único `import_dcat_file`) — con un solo fichero ambas opciones son equivalentes y la
+pregunta no aporta nada.
+
+**Si hay dos o más datasets** (OBLIGATORIO — no saltar, no asumir):
+antes de hacer ninguna llamada MCP, pregunta al usuario. No hay valor por defecto — no puedes
+continuar sin su respuesta:
 
 > "¿Cómo quieres hacer el import?
 > - **Opción A — Uno por dataset** (recomendado): cada dataset se importa por separado, seguimiento granular.
@@ -43,9 +50,37 @@ argument-hint: [dataset_id concreto, o "all" para importar lo descargado con fet
    - Si el usuario proporciona directamente el contenido RDF como texto: úsalo en `rdf_content`.
 
 2. Comprueba la configuración del entorno:
-   - `DATAMARKET_TEMPLATE_ID` y `DATAMARKET_PATH_ID` deben estar configurados.
-   - Si no están, informa al usuario que debe configurarlos en el `.env` del MCP server
-     o proporcionarlos explícitamente como argumentos.
+   - `DATAMARKET_TEMPLATE_ID` debe estar configurado. Si no lo está, informa al usuario
+     que debe configurarlo en el `.env` del MCP server o pasar `template_id` explícitamente.
+   - `DATAMARKET_PATH_ID` es **opcional**: es solo el path por defecto. Su ausencia no bloquea
+     el import — resuelve el path en la Fase 1b.
+
+## Fase 1b: Resolver el path destino (`pathId`)
+
+El `pathId` es un UUID de carpeta del DMP. **Nunca lo inventes ni lo adivines**: resuélvelo
+siempre con `list_data_product_paths`, que devuelve el árbol de paths filtrado por los permisos
+del usuario (tenant y usuario salen del entorno, no son argumentos).
+
+| Situación | Acción |
+|---|---|
+| El usuario nombró una carpeta ("impórtalo en Open Data") | `list_data_product_paths(nameLike="Open Data")` |
+| El usuario no dijo nada y hay `DATAMARKET_PATH_ID` | Usa el default, pero anúncialo antes de importar |
+| El usuario no dijo nada y no hay `DATAMARKET_PATH_ID` | `list_data_product_paths()` → muestra el árbol y pregunta dónde importar |
+| El usuario quiere ver las carpetas antes de decidir | `list_data_product_paths()` |
+| Hay que explorar una rama concreta | `list_data_product_paths(parentId="<UUID>")` |
+
+Cada nodo se imprime como `• <nombre> ✔ | ID: <uuid> | Path: <metadataPath> | Role: <rol>`.
+El valor que necesitas es el de `ID`. El ✔ marca las coincidencias de `nameLike`; los nodos
+sin ✔ son solo los padres que dan contexto.
+
+Resolución de coincidencias:
+- **0 coincidencias** → dilo y lista el árbol completo con `list_data_product_paths()` para que el usuario elija.
+- **Varias ✔** → muéstralas con su `metadataPath` y pide al usuario que elija. No escojas tú.
+- **Una sola ✔** → úsala y confirma nombre + `metadataPath` antes de lanzar los imports.
+
+Una vez resuelto, guarda el UUID y **pásalo explícitamente como `path_id` en todas las llamadas
+a `import_dcat_file`**. Reutilízalo durante toda la conversación; no vuelvas a listar paths en
+cada import salvo que el usuario cambie de carpeta.
 
 ## Fase 2: Lanzar imports
 
@@ -59,7 +94,7 @@ no debe esperar entre llamadas). Recoge todos los `importId` y consulta al final
 
 ```
 1. Para CADA dataset (en paralelo si es posible, o en ráfaga sin esperas entre llamadas):
-     import_dcat_file(rdf_file_path="/tmp/dcat-{id}.ttl", rdf_format="ttl")
+     import_dcat_file(rdf_file_path="/tmp/dcat-{id}.ttl", rdf_format="ttl", path_id="<uuid resuelto en Fase 1b>")
      → guarda el importId devuelto
 
 2. Si alguno ya viene en ERROR desde el POST, regístralo directamente como fallo.
@@ -79,7 +114,7 @@ antes de consultar.
 1. Combina todos los ficheros RDF:
    - Si son JSON-LD: merge_jsonld_files(file_paths=["/tmp/dcat-1.jsonld", ...], output_path="/tmp/dcat-combined.jsonld")
    - Si son Turtle (.ttl): concatenación directa de ficheros en /tmp/dcat-combined.ttl
-2. Llama a import_dcat_file(rdf_file_path="/tmp/dcat-combined.ttl") una única vez.
+2. Llama a import_dcat_file(rdf_file_path="/tmp/dcat-combined.ttl", path_id="<uuid resuelto en Fase 1b>") una única vez.
 3. Recoge el único importId.
 4. Llama a get_import_report(import_id=..., wait=True) para obtener el resultado.
 ```
@@ -105,7 +140,7 @@ Cuando todos los imports han finalizado, clasifica los resultados:
 | Tipo de error | Causa probable | Acción sugerida |
 |---------------|----------------|-----------------|
 | `RDF_IMPORT_TEMPLATE_NOT_FOUND` | UUID de template incorrecto | Verificar DATAMARKET_TEMPLATE_ID |
-| `RDF_IMPORT_PATH_ID_ERROR` | UUID de path incorrecto | Verificar DATAMARKET_PATH_ID |
+| `RDF_IMPORT_PATH_ID_ERROR` | UUID de path inexistente o sin permisos | Re-resolver con `list_data_product_paths` (Fase 1b); no reutilizar un UUID adivinado |
 | `RDF_IMPORT_FILE_ERROR` | RDF malformado en origen | El portal publicó un fichero inválido |
 | `RDF_IMPORT_NO_IMPORTABLE_TEMPLATE_ERROR` | Template sin configuración DCAT-AP | Revisar configuración del template |
 | Otros | Error interno DMP | Registrar para revisión manual |
@@ -117,6 +152,7 @@ Los **warnings** no son errores — el dataset se importó, pero con advertencia
 ```
 ✅ Importación completada
 
+  Path destino:         <nombre> (<uuid>)
   Total procesados:     58
   Importados con éxito: 55
   Con warnings:         8
@@ -155,4 +191,7 @@ publish_data_products(
 - Lanza todos los imports antes de esperar ninguno. Usa un único `get_import_reports(wait=True)` al final.
 - Si el DMP devuelve 403, informa al usuario sobre permisos (necesita rol WRITE en METADATA_IMPORT).
 - Si el DMP devuelve 404 en template o path, para el proceso y pide corrección antes de continuar.
+- **Nunca inventes un `pathId`**: resuélvelo con `list_data_product_paths` y confirma con el usuario
+  cuando haya varias coincidencias. Un UUID adivinado importa en la carpeta equivocada o falla.
+- Resuelve el path **una sola vez** por conversación y reutilízalo; no listes paths en cada import.
 - Siempre muestra los warnings aunque el import sea exitoso — ayudan a detectar metadatos incompletos.

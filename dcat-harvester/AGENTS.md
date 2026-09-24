@@ -19,9 +19,12 @@ Trabajo con dos MCP servers:
     - Tier 3 ArcGIS Hub: `fetch_arcgis_catalog`
     - Tier 3 SPARQL: `fetch_sparql_dcat_catalog`
     - Utilidades: `merge_jsonld_files`
-- **datamarket**: `import_dcat_file`, `get_import_report`, `get_import_reports`,
-  `search_published_data_products`, `search_data_products`,
-  `publish_data_products`, `unpublish_data_products`
+- **datamarket**:
+    - Paths (carpetas destino): `list_data_product_paths`
+    - Import: `import_dcat_file`, `get_import_report`, `get_import_reports`
+    - Consulta: `search_data_products`
+    - Ciclo de vida: `publish_data_products`, `unpublish_data_products`
+    - Borrado (irreversible, solo con confirmación explícita): `delete_data_product`
 
 ---
 
@@ -113,6 +116,49 @@ En ese caso usa `fetch_datos_gob_es_catalog`. La tool acepta nombres en lenguaje
 
 ---
 
+## 📂 Resolución del path destino (`pathId`)
+
+Todo Data Product vive en un **path** (carpeta) del DMP. El `pathId` es un UUID, nunca un nombre.
+**Nunca inventes ni adivines un UUID de path** — resuélvelo siempre con `list_data_product_paths`.
+
+`list_data_product_paths` devuelve el árbol de paths del tenant filtrado por los permisos del usuario.
+Tenant y usuario salen siempre de `DATAMARKET_TENANT_ID` / `DATAMARKET_USER` — no se pasan como argumento.
+
+| Situación | Llamada |
+|---|---|
+| El usuario nombra una carpeta ("impórtalo en Open Data") | `list_data_product_paths(nameLike="Open Data")` → coge el `ID` del nodo marcado con ✔ |
+| El usuario no dice dónde y no hay `DATAMARKET_PATH_ID` | `list_data_product_paths()` → muestra el árbol y pregunta cuál |
+| El usuario pide ver las carpetas disponibles | `list_data_product_paths()` |
+| Quieres explorar solo una rama concreta | `list_data_product_paths(parentId="<UUID>")` |
+
+Parámetros (ambos opcionales): `parentId` (subárbol bajo ese UUID), `nameLike` (subcadena
+case-insensitive sobre el nombre; las coincidencias salen marcadas ✔ junto con sus paths padre).
+
+Cada nodo se muestra como `• <nombre> | ID: <uuid> | Path: <metadataPath> | Role: <rol>`.
+El valor que necesitas es el de `ID`.
+
+**Reglas de resolución:**
+
+1. `nameLike` devuelve **0 coincidencias** → informa al usuario y lista el árbol completo
+   con `list_data_product_paths()` para que elija.
+2. `nameLike` devuelve **varias coincidencias ✔** → muéstralas con su `metadataPath` y
+   pide al usuario que elija una. No escojas tú.
+3. `nameLike` devuelve **exactamente una ✔** → úsala y confirma al usuario el nombre + `metadataPath`
+   antes de importar.
+4. Si el usuario no indica carpeta y `DATAMARKET_PATH_ID` está configurado, ese es el valor por defecto;
+   dilo explícitamente antes de importar ("se importará en el path por defecto `<uuid>`").
+5. Una vez resuelto, **pasa el `pathId` explícito** a las tools (`path_id` en `import_dcat_file`,
+   `publish_data_products` y `unpublish_data_products`; `pathId` en `search_data_products`).
+   No te apoyes en el default del entorno cuando el usuario haya nombrado una carpeta.
+6. Reutiliza el `pathId` resuelto durante toda la conversación — no vuelvas a listar paths
+   en cada import salvo que el usuario cambie de carpeta.
+
+⚠️ **Ojo con el nombre del parámetro**: es `path_id` (snake_case) en `import_dcat_file`,
+`publish_data_products` y `unpublish_data_products`, pero `pathId` (camelCase) en
+`search_data_products` y en la propia `list_data_product_paths` (`parentId`, `nameLike`).
+
+---
+
 ## Triage (siempre primero)
 
 Antes de actuar, clasifica la petición:
@@ -134,8 +180,11 @@ Antes de actuar, clasifica la petición:
 | "publica el dataproduct ID 42" / "publica estos IDs: ..." | `/publish-dmp-products` |
 | "despublica los dataproducts de X" / "quita de publicado los que importé" | `/unpublish-dmp-products` |
 | "despublica el dataproduct ID 42" / "despublica IDs: ..." / "despublicame todos" | `/unpublish-dmp-products` |
-| "¿qué productos publicados hay con formato PDF?" / "filtra por tema Medio ambiente" | `search_published_data_products` directo |
-| "busca datasets sobre X" / "hay datos de biodiversidad?" | `search_published_data_products` directo |
+| "borra / elimina los dataproducts de X" / "bórrame el ID 42" | `/unpublish-dmp-products` (despublica y ofrece el borrado en su Fase 5) |
+| "¿qué carpetas / paths hay en el DMP?" / "¿dónde puedo importar?" | `list_data_product_paths` directo |
+| "importa X en la carpeta Y" | `list_data_product_paths(nameLike="Y")` → `path_id` → skill de import |
+| "¿qué hay en la carpeta Y?" / "lista los productos de la carpeta Y" | `list_data_product_paths(nameLike="Y")` → `search_data_products(pathId=...)` |
+| "busca datasets sobre X" / "hay datos de biodiversidad?" | `search_data_products` directo |
 | Pregunta sobre qué portales soportamos | Responde con los tipos de plataforma soportados (CKAN, DKAN, ODS, ArcGIS Hub, SPARQL, Tier 1 directo) |
 
 **Si la petición implica importar más de un dataset**, antes de hacer nada pregunta:
@@ -152,9 +201,11 @@ Cuando el usuario dice **"descárgame e importame"**, **"carga e importa"** o si
 el flujo es **directo sin preguntas intermedias**:
 
 ```
+0. [solo si el usuario nombró una carpeta destino]
+   list_data_product_paths(nameLike="<carpeta>")  → path_id
 1. fetch_datos_gob_es_catalog(org, keyword?, location?, from_date?, max_results=N)
    → devuelve lista de file_path en /tmp/dcat-*.ttl
-2. import_dcat_file(rdf_file_path=<path>)  para cada fichero [lanzar en paralelo]
+2. import_dcat_file(rdf_file_path=<path>, path_id=<uuid si resuelto>)  para cada fichero [lanzar en paralelo]
 3. get_import_reports(import_ids=[...])    esperar resultados de todos a la vez
 ```
 
@@ -219,9 +270,10 @@ obtener los datos reales del portal.
 
 Solo cuando el usuario lo pide explícitamente ("descarga de datos.gob.es"):
 ```
+0. [solo si el usuario nombró una carpeta destino] list_data_product_paths(nameLike="<carpeta>") → path_id
 1. fetch_datos_gob_es_catalog("<nombre o DIR3>", keyword?, location?, from_date?, max_results?)
    → devuelve lista de file_path en /tmp/dcat-*.ttl
-2. import_dcat_file(rdf_file_path=<path>)  para cada fichero [lanzar en paralelo]
+2. import_dcat_file(rdf_file_path=<path>, path_id=<uuid si resuelto>)  para cada fichero [lanzar en paralelo]
 3. get_import_reports(import_ids=[...])    esperar resultados de todos a la vez
 ```
 Sin preguntas intermedias si el usuario ya dijo que quiere importar.
@@ -265,31 +317,43 @@ Sin preguntas intermedias si el usuario ya dijo que quiere importar.
    Recoge todos los `importId` y haz un único `get_import_reports(import_ids=[...])`
    al final para obtener todos los resultados de una sola vez.
 
-10. **Elige la tool de búsqueda correcta**:
-    - `search_published_data_products` → búsquedas orientadas al usuario (texto libre,
-      filtros por tema/publisher/formato, exploración del catálogo publicado).
-    - `search_data_products` → solo cuando necesites también productos no publicados
-      (borradores) o IDs internos para `publish_data_products`/`unpublish_data_products`.
+10. **Búsqueda de Data Products**: la única tool de búsqueda es `search_data_products`
+    (filtros `nameLike`, `descriptionLike`, `keywords`, `pathId`, `withAssets`; todos opcionales
+    y combinables, pero se requiere al menos uno). Cubre tanto productos publicados como
+    borradores y es la que da los IDs internos para `publish_data_products`/`unpublish_data_products`.
 
-11. **Paginación segura en búsquedas**: para `search_published_data_products`, usa
-    siempre paginación con `size=10` y avanza por páginas (`page=1,2,3...`).
+11. **Paginación segura en búsquedas**: para `search_data_products`, usa siempre paginación
+    con `size=10` y avanza por páginas (`page=0,1,2...`, base 0).
     No uses `size>10` para evitar respuestas demasiado grandes.
 
-12. **No listar todo para despublicar**: si la intención del usuario es
+12. **No listar todo para publicar/despublicar**: si la intención del usuario es
     publicar/despublicar, usa directamente `/publish-dmp-products` o
     `/unpublish-dmp-products`; no hagas una búsqueda masiva previa con
-    `search_published_data_products`.
+    `search_data_products` — ambas tools filtran y paginan internamente.
+
+13. **Borrado siempre confirmado**: `delete_data_product` es irreversible (elimina assets,
+    data contracts, ficheros y el mapping del import RDF) y borra **un producto por llamada**
+    usando su ID numérico. No lo llames nunca sin confirmación explícita del usuario sobre la
+    lista concreta de IDs. El borrado se gestiona en la Fase 5 de `/unpublish-dmp-products`,
+    no de forma suelta.
+
+14. **Nunca inventes un `pathId`**: resuélvelo siempre con `list_data_product_paths`
+    (ver §Resolución del path destino). Un UUID adivinado provoca `RDF_IMPORT_PATH_ID_ERROR`
+    o importa en la carpeta equivocada.
 
 ---
 
 ## Configuración del MCP server
 
-El agente usa los MCP servers configurados en `.mcp.json`.
-
 Variables de entorno requeridas en el server `datamarket`:
 - `DATAMARKET_API_URL` — URL del dg-datamarket-api
 - `DATAMARKET_TENANT_ID`, `DATAMARKET_USER`, `DATAMARKET_COOKIE` — autenticación
+  (`DATAMARKET_TENANT_ID` y `DATAMARKET_USER` son además los que usa `list_data_product_paths`
+  para decidir qué paths ve el usuario; no se pueden pasar como argumento)
 - `DATAMARKET_TEMPLATE_ID` — UUID del template DCAT-AP-ES en el DMP
-- `DATAMARKET_PATH_ID` — UUID de la carpeta destino en el DMP
+- `DATAMARKET_PATH_ID` — **opcional**: UUID de la carpeta destino por defecto. Si falta, no es
+  bloqueante: resuelve el path en tiempo de ejecución con `list_data_product_paths` y pásalo
+  explícitamente como `path_id`. Si el usuario nombra una carpeta, el valor resuelto siempre
+  tiene prioridad sobre esta variable.
 
-Si alguna falta, informa al usuario antes de intentar la importación.
+Si falta `DATAMARKET_TEMPLATE_ID` o la autenticación, informa al usuario antes de intentar la importación.

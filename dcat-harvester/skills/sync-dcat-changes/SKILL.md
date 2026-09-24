@@ -90,20 +90,28 @@ y continúa con Fase 3. Si no: cancela el proceso.
 
 ## Fase 3: Descarga y import de cambios
 
-Sigue el mismo flujo que `/import-dcat-dmp` (mismas estrategias de batching y polling):
+Sigue el mismo flujo que `/import-dcat-dmp` (mismas estrategias de batching y polling).
+
+**Antes de lanzar ningún import, resuelve el path destino.** El `pathId` es un UUID:
+nunca lo inventes. Si el usuario nombra una carpeta, resuélvela con
+`list_data_product_paths(nameLike="<carpeta>")` y usa el valor `ID` del nodo marcado ✔;
+si hay varias coincidencias, pide al usuario que elija. Si no nombra ninguna, se usa
+`DATAMARKET_PATH_ID` — anúncialo antes de importar. En una re-sincronización, usa
+**el mismo path** que en el import original: importar en otra carpeta crea duplicados
+en lugar de actualizar.
 
 - **Para CKAN y DKAN** (lista de dataset IDs):
   1. `fetch_dcat_dataset(base_url, dataset_id, format="auto")` para cada dataset → guarda `file_path`.
      Acumula solo `file_path`, nunca el contenido RDF.
-  2. Lanza todos los imports con `import_dcat_file(rdf_file_path=..., wait=False)` → recoge importIds.
+  2. Lanza todos los imports con `import_dcat_file(rdf_file_path=..., path_id=<uuid resuelto>, wait=False)` → recoge importIds.
   3. Un único `get_import_reports(import_ids=[...], wait=True)` para obtener todos los resultados.
 
 - **Para SPARQL** (fichero RDF ya descargado en Fase 2):
-  1. El `file_path` del catálogo SPARQL ya está disponible — lanza directamente `import_dcat_file`.
+  1. El `file_path` del catálogo SPARQL ya está disponible — lanza directamente `import_dcat_file(rdf_file_path=..., path_id=<uuid resuelto>)`.
   2. Un único `get_import_reports(import_ids=[...], wait=True)`.
 
 - **Para ODS y ArcGIS Hub** (fichero único de catálogo completo):
-  1. El `file_path` del catálogo ya está disponible — lanza `import_dcat_file`.
+  1. El `file_path` del catálogo ya está disponible — lanza `import_dcat_file(rdf_file_path=..., path_id=<uuid resuelto>)`.
   2. `get_import_report(import_id=..., wait=True)`.
 
 El DMP gestiona internamente si el dataset es nuevo o es una actualización (basado en URI).
@@ -114,6 +122,7 @@ El DMP gestiona internamente si el dataset es nuevo o es una actualización (bas
 🔄 Sincronización completada
 
   Plataforma:             {plataforma}
+  Path destino:           {nombre_path} ({path_id})
   Fecha de referencia:    {fecha_referencia}
   Datasets procesados:    {total}
   Actualizados/creados:   {successful}
