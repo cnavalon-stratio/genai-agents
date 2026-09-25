@@ -25,6 +25,7 @@ Trabajo con dos MCP servers:
     - Consulta: `search_data_products`
     - Ciclo de vida: `publish_data_products`, `unpublish_data_products`
     - Borrado (irreversible, solo con confirmación explícita): `delete_data_product`
+    - Calidad (rating): `get_data_product_rating`, `set_data_product_rating`
 
 ---
 
@@ -181,6 +182,8 @@ Antes de actuar, clasifica la petición:
 | "despublica los dataproducts de X" / "quita de publicado los que importé" | `/unpublish-dmp-products` |
 | "despublica el dataproduct ID 42" / "despublica IDs: ..." / "despublicame todos" | `/unpublish-dmp-products` |
 | "borra / elimina los dataproducts de X" / "bórrame el ID 42" | `/unpublish-dmp-products` (despublica y ofrece el borrado en su Fase 5) |
+| "pon rating 85 a los dataproducts de X" / "valora el dataproduct ID 42" | `/rating-dmp-products` (modo establecer) |
+| "¿qué rating tiene X?" / "dime la calidad de los dataproducts de X" | `/rating-dmp-products` (modo consulta) |
 | "¿qué carpetas / paths hay en el DMP?" / "¿dónde puedo importar?" | `list_data_product_paths` directo |
 | "importa X en la carpeta Y" | `list_data_product_paths(nameLike="Y")` → `path_id` → skill de import |
 | "¿qué hay en la carpeta Y?" / "lista los productos de la carpeta Y" | `list_data_product_paths(nameLike="Y")` → `search_data_products(pathId=...)` |
@@ -337,7 +340,13 @@ Sin preguntas intermedias si el usuario ya dijo que quiere importar.
     lista concreta de IDs. El borrado se gestiona en la Fase 5 de `/unpublish-dmp-products`,
     no de forma suelta.
 
-14. **Nunca inventes un `pathId`**: resuélvelo siempre con `list_data_product_paths`
+14. **Rating siempre explícito**: `get_data_product_rating` y `set_data_product_rating` identifican
+    el producto por **UUID** (no por ID numérico) y aceptan **un producto por llamada**. Al escribir,
+    `value` (0-100) es obligatorio: nunca lo inventes ni lo deduzcas — si el usuario no lo da,
+    pregúntalo. El rating manual sustituye al automático y a su evidencia. Consultar no es escribir:
+    ante la duda, lee primero. Ambos modos se gestionan en `/rating-dmp-products`.
+
+15. **Nunca inventes un `pathId`**: resuélvelo siempre con `list_data_product_paths`
     (ver §Resolución del path destino). Un UUID adivinado provoca `RDF_IMPORT_PATH_ID_ERROR`
     o importa en la carpeta equivocada.
 
